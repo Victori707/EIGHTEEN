@@ -4,11 +4,9 @@
  * Пути к медиа — относительно папки public/ (без слеша в начале).
  */
 
-export type GachaPrize =
-  | { kind: 'message'; label: string; title: string; text: string; note?: string }
-  | { kind: 'wish'; label: string; title: string; text: string; note?: string }
-  | { kind: 'prize'; label: string; title: string; text: string; note?: string; rarity?: string; accent?: string }
-  | { kind: 'photo'; label: string; title: string; text: string; note?: string; image: string }
+export type GachaItemId = 'fox' | 'omamori' | 'camera' | 'ticket' | 'cat' | 'letter'
+/** Приз гачапона: id выбирает рисунок предмета, title — название, text — подпись. */
+export type GachaItem = { id: GachaItemId; title: string; text: string }
 
 export type Photo = { src: string; alt: string; caption?: string }
 
@@ -89,7 +87,7 @@ export const site = {
   },
 
   omikuji: {
-    title: 'Йоу, Арису, возьми омикудзи',
+    title: 'よっ、アリス！ おみくじ 引いてみない？',
     button: 'Тянуть',
   },
 
@@ -108,47 +106,37 @@ export const site = {
 
   /** Инстакс: фото и подписи на обороте. Добавь сколько хочешь. */
   instax: [
-    { image: 'media/photos/instax-01.jpg', caption: 'Дотонбори, тот самый бегун', date: 'Осака' },
-    { image: 'media/photos/instax-02.jpg', caption: 'тысяча ворот и мы', date: 'Киото' },
-    { image: 'media/photos/instax-03.jpg', caption: 'башня за спиной, мы впереди', date: 'Осака' },
-    { image: 'media/photos/instax-04.jpg', caption: 'кимоно — официально', date: 'Япония' },
-    { image: 'media/photos/instax-05.jpg', caption: 'внутри звёзд', date: 'teamLab' },
-    { image: 'media/photos/instax-06.jpg', caption: 'кимоно-дуэт', date: 'Япония' },
-    { image: 'media/photos/instax-07.jpg', caption: 'снег, доска, никакой грации', date: 'зима' },
-    { image: 'media/photos/instax-08.jpg', caption: 'покорили. ну почти', date: 'горы' },
-    { image: 'media/photos/instax-09.jpg', caption: 'котик важнее всего', date: '—' },
-    { image: 'media/photos/instax-10.jpg', caption: 'не более 4 человек. нас 2', date: 'лифт' },
-    { image: 'media/photos/instax-11.jpg', caption: 'с осьминогом', date: '—' },
-    { image: 'media/photos/instax-12.jpg', caption: 'полежим', date: '—' },
-    { image: 'media/photos/instax-13.jpg', caption: 'просто гуляем', date: '—' },
-    { image: 'media/photos/instax-14.jpg', caption: 'кадр, который никто не планировал', date: '—' },
-    { image: 'media/photos/instax-15.jpg', caption: 'режим: уютный хищник', date: '—' },
-    { image: 'media/photos/instax-16.jpg', caption: 'горы, лыжи и никаких лишних слов', date: '—' },
+    { image: 'media/photos/instax-01.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-02.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-03.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-04.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-05.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-06.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-07.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-08.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-09.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-10.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-11.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-12.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-13.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-14.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-15.jpg', caption: '', date: '' },
+    { image: 'media/photos/instax-16.jpg', caption: '', date: '' },
   ],
 
   /**
-   * Гачапон. Капсулы выпадают ПО ПОРЯДКУ этого списка — так важные выпадут первыми.
-   * Когда автомат опустеет, он перезаправится и пойдёт по кругу.
-   * accent — цвет верхушки капсулы.
-   * Строки в [квадратных скобках] — места для ваших мемов, замени текст.
+   * Гачапон: 6 коллекционных подарков. Выпадают в случайном порядке без повторов,
+   * пока не соберёшь все шесть, потом можно начать новый круг.
+   * id — какой рисунок показать (рисунки лежат в src/components/gachaItems.tsx).
    */
   gacha: [
-    {
-      kind: 'prize',
-      label: '10.10',
-      rarity: 'Rare capsule',
-      accent: '#d9772b',
-      title: 'В этот день родились две легенды:',
-      text: 'Наруто Узумаки и Лиса.',
-      note: 'Совпадение? Возможно.',
-    },
-    { kind: 'message', label: 'SYSTEM REQUIREMENTS', title: 'Системные требования:', text: 'Ноутбук жив на 50/50.', note: 'Рекомендуемые: 100/100. Работаем с тем, что есть.' },
-    { kind: 'prize', label: 'SSR', rarity: 'Super rare', accent: '#d74c38', title: 'Купон на одно желание', text: 'Любое. Вне очереди.', note: 'Предъявить мне. Срок действия — бессрочно.' },
-    { kind: 'photo', label: 'PHOTO', title: 'Редкий кадр', text: 'Конусы. Без комментариев.', image: 'media/photos/gacha-photo.jpg' },
-    { kind: 'message', label: 'MEME', title: 'Наш мем №1', text: '[мем или шутка — замени в siteContent.ts]' },
-    { kind: 'message', label: 'MEME', title: 'Наш мем №2', text: '[ещё одна шутка — замени в siteContent.ts]' },
-    { kind: 'wish', label: 'WISH', title: 'Желание на год', text: 'Больше приключений, меньше дедлайнов, все фотографии — в фокусе.' },
-  ] satisfies GachaPrize[] as GachaPrize[],
+    { id: 'fox', title: 'Брелок-лисичка', text: 'Теперь у тебя есть карманная версия себя.' },
+    { id: 'omamori', title: 'Талисман удачи', text: 'На случай, если обычного везения недостаточно.' },
+    { id: 'camera', title: 'Мини-фотоаппарат', text: 'Для самых имбовых фоток.' },
+    { id: 'ticket', title: 'Билет на встречу', text: 'Действителен на одну встречу со мной. Срок действия: бессрочно. Хотя для встречи со мной билет, конечно, не нужен.' },
+    { id: 'cat', title: 'Котик', text: 'Почти Кли. Ничего не делает. Просто очень хороший.' },
+    { id: 'letter', title: 'Секретная капсула', text: 'Обнимаю тебя. Даже если сейчас мы в разных городах.' },
+  ] satisfies GachaItem[] as GachaItem[],
 
   /** Письмо: каждый элемент массива — отдельный абзац. */
   letter: {

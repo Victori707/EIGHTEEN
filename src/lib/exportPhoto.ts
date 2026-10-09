@@ -84,7 +84,7 @@ export async function renderInstaxPng(item: InstaxItem): Promise<Blob> {
   ctx.font = '400 22px "JetBrains Mono", monospace'
   ctx.fillStyle = '#c89a63'
   ctx.textAlign = 'right'
-  ctx.fillText(`${item.date} · EIGHTEEN`, W - side - 8, H - 34)
+  ctx.fillText(item.date ? `${item.date} · EIGHTEEN` : 'EIGHTEEN', W - side - 8, H - 34)
   ctx.textAlign = 'left'
   ctx.fillStyle = '#651f32'
   ctx.fillText(`${site.recipient.nickname.toUpperCase()} · ${site.recipient.age}`, side + 8, H - 34)

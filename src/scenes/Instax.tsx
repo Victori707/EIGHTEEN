@@ -226,7 +226,7 @@ export default function Instax() {
         {/* the desk: a printed cutting mat. Cards live INSIDE it (z above the camera). */}
         <div className="relative z-20">
           <div className="absolute inset-0 rounded-[2px] bg-[#e7ddcd] shadow-[inset_0_1px_0_rgba(255,255,255,.6),inset_0_-30px_60px_-40px_rgba(101,31,50,.25)]" />
-          <div className="label absolute left-3 top-3 text-[9px] text-ink/40">Table · drag · tap to flip</div>
+          <div className="label absolute left-3 top-3 text-[9px] text-ink/40">Table · drag</div>
           <div className="label absolute right-3 top-3 text-[9px] tabular-nums text-ink/40">{String(shots.length).padStart(2, '0')} shots</div>
           {/* inner area keeps every card fully inside the desk */}
           <div className="relative h-[min(60svh,500px)] min-h-[340px] wide:h-[min(72vh,680px)]">
@@ -280,7 +280,7 @@ export default function Instax() {
             </button>
           </div>
           {exportError && <p className="mt-3 text-[14px] text-paper-2">Не получилось сохранить. Попробуй ещё раз.</p>}
-          <p className="label mt-4 max-w-[380px] text-[9px] leading-relaxed text-paper-2/50">жми на спуск · фото двигаются (на телефоне — за скотч) · тап переворачивает</p>
+          <p className="label mt-4 max-w-[380px] text-[9px] leading-relaxed text-paper-2/50">жми на спуск · фото двигаются (на телефоне — за скотч)</p>
         </div>
       </div>
 
@@ -332,6 +332,7 @@ function Photo({
   const img = useRef<HTMLDivElement>(null)
   const veil = useRef<HTMLDivElement>(null)
   const [flipped, setFlipped] = useState(false)
+  const canFlip = !!shot.item.caption
   const settled = useRef(false)
   const drag = useRef<{ id: number; sx: number; sy: number; ox: number; oy: number; moved: boolean; handle: boolean } | null>(null)
   const pad = (w * 5) / 72
@@ -419,8 +420,10 @@ function Photo({
       const y = gsap.getProperty(el.current, 'y') as number
       onMove(shot.id, maxX ? x / maxX : 0, maxY ? y / maxY : 0)
     } else if (!cancelled) {
-      sfx.paper()
-      setFlipped((f) => !f)
+      if (canFlip) {
+        sfx.paper()
+        setFlipped((f) => !f)
+      }
     }
   }
 
@@ -435,12 +438,12 @@ function Photo({
       onPointerCancel={(e) => end(e, true)}
       role="button"
       tabIndex={0}
-      aria-label={`Фото ${shot.n}: ${shot.item.caption}. Нажми, чтобы перевернуть`}
+      aria-label={canFlip ? `Фото ${shot.n}: ${shot.item.caption}. Нажми, чтобы перевернуть` : `Фото ${shot.n}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           onFocus(shot.id)
-          setFlipped((f) => !f)
+          if (canFlip) setFlipped((f) => !f)
         }
       }}
     >
@@ -457,7 +460,7 @@ function Photo({
         >
           <div className="absolute overflow-hidden bg-[#2a2426]" style={{ left: pad, top: padTop, width: S, height: S }}>
             <div ref={img} className="h-full w-full">
-              <SmartImage src={shot.item.image} alt={shot.item.caption} className="h-full w-full object-cover" />
+              <SmartImage src={shot.item.image} alt={shot.item.caption || `Фото ${shot.n}`} className="h-full w-full object-cover" />
             </div>
             <div ref={veil} className="absolute inset-0" style={{ background: 'linear-gradient(160deg,#d8d4c6,#c9c7bb 60%,#bfc2b8)' }} />
             <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_0_1px_rgba(0,0,0,.12)]" />

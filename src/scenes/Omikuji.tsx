@@ -101,9 +101,9 @@ export default function Omikuji() {
             <span className="hairline w-12" />
             <span className="jp text-[14px] tracking-[0.3em]">おみくじ</span>
           </div>
-          <h2 data-otitle className="poster mt-5 text-[clamp(34px,8.4vw,92px)] leading-[1.02]">
+          <h2 data-otitle className="poster mt-5 text-[clamp(26px,7.4vw,44px)] leading-[1.12] wide:text-[min(4.1vw,72px)]">
             {words.map((w, i) => (
-              <span key={i} className="mask mr-[0.22em] inline-block align-top">
+              <span key={i} className="mask mr-[0.22em] inline-block whitespace-nowrap align-top">
                 <span data-w className={`inline-block ${i === words.length - 1 ? 'text-verm' : i === 1 ? 'text-wine' : ''}`}>
                   {w}
                 </span>

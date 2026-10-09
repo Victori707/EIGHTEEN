@@ -1,11 +1,12 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
-import { site, type GachaPrize } from '../content/siteContent'
+import { X } from 'lucide-react'
+import { site, type GachaItem } from '../content/siteContent'
 import { RegMarks, SmartImage, Sprig, Stamp } from '../components/ui'
+import { GachaItemArt } from '../components/gachaItems'
 import { useGsap } from '../lib/useGsap'
-import { createSequence, prefersReducedMotion, rand, vibrate } from '../lib/util'
+import { prefersReducedMotion, rand, shuffle, vibrate } from '../lib/util'
 import { sfx } from '../lib/audio'
-import { confetti } from '../lib/confetti'
 
 type Phase = 'ready' | 'turning' | 'dropped' | 'opening' | 'revealed'
 const CAP_COLORS = ['#681f32', '#c89a63', '#b8a798', '#171517', '#f5f0e8']
@@ -20,12 +21,14 @@ const PILE: [number, number][] = [
 export default function Gacha() {
   const root = useRef<HTMLElement>(null)
   const capsule = useRef<HTMLButtonElement>(null)
-  // prizes come out in the order of the list, so the personal ones are never lost to randomness
-  const bag = useMemo(() => createSequence(site.gacha), [])
+  // random order without repeats until all six are collected
+  const TOTAL = site.gacha.length
+  const queue = useRef<GachaItem[]>(shuffle(site.gacha))
   const [phase, setPhase] = useState<Phase>('ready')
-  const [prize, setPrize] = useState<GachaPrize | null>(null)
+  const [prize, setPrize] = useState<GachaItem | null>(null)
+  const [collected, setCollected] = useState<GachaItem[]>([])
   const [capColor, setCapColor] = useState(CAP_COLORS[0])
-  const [left, setLeft] = useState(site.gacha.length)
+  const [left, setLeft] = useState(TOTAL)
   const [pulls, setPulls] = useState(0)
   const angle = useRef(0)
   const drag = useRef<{ a0: number; acc: number; last: number; clicks: number } | null>(null)
@@ -55,6 +58,7 @@ export default function Gacha() {
 
   /** Довернуть ручку до конца оборота с «механическим сопротивлением». */
   const finishTurn = () => {
+    if (queue.current.length === 0) return
     setPhase('turning')
     const reduced = prefersReducedMotion()
     const start = angle.current
@@ -80,10 +84,10 @@ export default function Gacha() {
 
   const dispense = () => {
     setHandle(0)
-    const p = bag.next()
+    const p = queue.current.pop()!
     setPrize(p)
-    setCapColor(p.kind === 'prize' && p.accent ? p.accent : CAP_COLORS[Math.floor(Math.random() * CAP_COLORS.length)])
-    setLeft(bag.left)
+    setCapColor(CAP_COLORS[Math.floor(Math.random() * CAP_COLORS.length)])
+    setLeft(queue.current.length)
     setPulls((n) => n + 1)
     setPhase('dropped')
     sfx.clunk()
@@ -115,7 +119,8 @@ export default function Gacha() {
     const c = capsule.current!
     const done = () => {
       setPhase('revealed')
-      if (confettiBox.current && prize?.kind === 'prize') confetti(confettiBox.current, { count: 30, from: 'center' })
+      if (prize) setCollected((c) => (c.some((x) => x.id === prize.id) ? c : [...c, prize]))
+      sfx.chime()
     }
     if (prefersReducedMotion()) return done()
     gsap
@@ -127,19 +132,26 @@ export default function Gacha() {
       .fromTo(c.querySelector('[data-rays]'), { scale: 0.2, opacity: 0 }, { scale: 1.4, opacity: 1, duration: 0.5, ease: 'power2.out' }, '<')
   }
 
-  const again = () => {
+  /** Закрыть предмет и вернуться к автомату. */
+  const close = () => {
     sfx.tap()
     setPhase('ready')
     setPrize(null)
-    if (bag.left === 0) {
-      // the machine gets refilled and starts from the top of the list again
-      bag.reset()
-      setLeft(site.gacha.length)
-      requestAnimationFrame(() => {
-        if (!prefersReducedMotion()) gsap.from('[data-cap]', { y: -120, opacity: 0, duration: 0.9, stagger: 0.04, ease: 'bounce.out' })
-      })
-    }
   }
+
+  /** Все шесть собраны — перезаправить автомат и начать новый круг. */
+  const newRound = () => {
+    sfx.tap()
+    queue.current = shuffle(site.gacha)
+    setCollected([])
+    setLeft(TOTAL)
+    setPhase('ready')
+    setPrize(null)
+    requestAnimationFrame(() => {
+      if (!prefersReducedMotion()) gsap.from(root.current!.querySelectorAll('[data-cap]'), { y: -120, opacity: 0, duration: 0.9, stagger: 0.04, ease: 'bounce.out' })
+    })
+  }
+  const complete = left === 0 && phase === 'ready'
 
   // ---- handle: tap = auto turn, drag clockwise = manual turn ----
   const center = (el: Element) => {
@@ -151,7 +163,7 @@ export default function Gacha() {
     return (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI
   }
   const onHandleDown = (e: React.PointerEvent) => {
-    if (phase !== 'ready') return
+    if (phase !== 'ready' || queue.current.length === 0) return
     e.currentTarget.setPointerCapture(e.pointerId)
     drag.current = { a0: angAt(e), acc: 0, last: angAt(e), clicks: 0 }
   }
@@ -177,7 +189,7 @@ export default function Gacha() {
   const onHandleUp = () => {
     const d = drag.current
     drag.current = null
-    if (!d || phase !== 'ready') return
+    if (!d || phase !== 'ready' || queue.current.length === 0) return
     if (d.acc >= 250 || d.acc < 12) finishTurn()
     else {
       const o = { a: d.acc }
@@ -300,7 +312,7 @@ export default function Gacha() {
                 onPointerCancel={onHandleUp}
               />
             </svg>
-            {phase === 'ready' && (
+            {phase === 'ready' && left > 0 && (
               <button
                 type="button"
                 onClick={finishTurn}
@@ -346,127 +358,142 @@ export default function Gacha() {
           </ol>
 
           <div className="label mt-4 flex w-[min(80vw,340px)] justify-between text-[9px] text-ink/60 wide:w-[min(30vw,440px)]">
-            <span>Pulls · {String(pulls).padStart(2, '0')}</span>
             <span>
-              В автомате · {String(left).padStart(2, '0')} / {String(site.gacha.length).padStart(2, '0')}
+              Собрано · {collected.length} / {TOTAL}
+            </span>
+            <span>
+              В автомате · {String(left).padStart(2, '0')} / {String(TOTAL).padStart(2, '0')}
             </span>
           </div>
         </div>
 
-        {/* the prize appears right here, next to the machine */}
-        <div className="relative min-h-[300px] wide:min-h-[560px] wide:pt-16">
-          {phase === 'revealed' && prize ? (
-            <PrizeCard key={pulls} prize={prize} color={capColor} onAgain={again} lastOne={left === 0} />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-6 wide:items-start">
-              <figure data-gphoto className="relative w-[min(74vw,420px)] wide:w-[min(30vw,420px)] bg-paper-2 p-2 pb-3 shadow-[0_30px_50px_-24px_rgba(0,0,0,.55)]" style={{ rotate: '4deg' }}>
-                <div className="aspect-[4/3] overflow-hidden">
-                  <SmartImage src={site.photos.gacha.src} alt={site.photos.gacha.alt} className="h-full w-full object-cover" />
-                </div>
-                <span className="tape -left-5 top-4 -rotate-[30deg]" />
-                <figcaption className="label mt-2 text-[9px] text-ink/50">{site.photos.gacha.caption}</figcaption>
-                <div className="absolute -bottom-8 -right-4 wide:-right-8" style={{ rotate: '-10deg' }}>
-                  <Stamp color="verm" className="relative h-[96px] w-[96px] bg-paper-2">
-                    <span className="poster text-[13px] leading-tight">
-                      RARE
-                      <br />
-                      INSIDE
-                    </span>
-                  </Stamp>
-                </div>
-              </figure>
-              <div className="flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1 wide:justify-start">
-                <span className="poster text-[56px] leading-none tabular-nums text-wine">{String(left).padStart(2, '0')}</span>
-                <span className="label text-ink/70">капсул в автомате · одна редкая</span>
+        {/* the photo + the collection shelf */}
+        <div className="relative wide:pt-16">
+          <div className="flex flex-col items-center gap-8 wide:items-start">
+            <figure data-gphoto className="relative w-[min(74vw,420px)] wide:w-[min(30vw,420px)] bg-paper-2 p-2 pb-3 shadow-[0_30px_50px_-24px_rgba(0,0,0,.55)]" style={{ rotate: '4deg' }}>
+              <div className="aspect-[4/3] overflow-hidden">
+                <SmartImage src={site.photos.gacha.src} alt={site.photos.gacha.alt} className="h-full w-full object-cover" />
               </div>
+              <span className="tape -left-5 top-4 -rotate-[30deg]" />
+              <figcaption className="label mt-2 text-[9px] text-ink/50">{site.photos.gacha.caption}</figcaption>
+              <div className="absolute -bottom-8 -right-4 wide:-right-8" style={{ rotate: '-10deg' }}>
+                <Stamp color="verm" className="relative h-[96px] w-[96px] bg-paper-2">
+                  <span className="poster text-[13px] leading-tight">
+                    RARE
+                    <br />
+                    INSIDE
+                  </span>
+                </Stamp>
+              </div>
+            </figure>
+            <div className="flex w-full max-w-[420px] flex-col items-center gap-3 wide:items-start">
+              <div className="flex items-baseline gap-3">
+                <span className="label text-ink/70">Собрано</span>
+                <span className="poster text-[44px] leading-none tabular-nums text-wine">
+                  {collected.length}
+                  <span className="text-ink/30">/{TOTAL}</span>
+                </span>
+              </div>
+              <Shelf items={collected} uid="shelf" />
+              {complete && (
+                <button type="button" onClick={newRound} className="btn-pill btn-solid mt-2">
+                  Начать новый круг
+                </button>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
+
+      {phase === 'revealed' && prize && (
+        <Reveal key={pulls} item={prize} n={collected.length} total={TOTAL} collected={collected} onClose={close} onNewRound={newRound} last={left === 0} />
+      )}
     </section>
   )
 }
 
-function PrizeCard({ prize, color, onAgain, lastOne }: { prize: GachaPrize; color: string; onAgain: () => void; lastOne: boolean }) {
+/** Полка коллекции: шесть ячеек, собранные предметы показаны миниатюрами. */
+function Shelf({ items, uid, small = false }: { items: GachaItem[]; uid: string; small?: boolean }) {
+  return (
+    <ul className={`grid grid-cols-6 ${small ? 'w-[min(100%,300px)] gap-1.5' : 'w-full max-w-[420px] gap-2'}`} aria-label={`Собрано ${items.length} из ${site.gacha.length}`}>
+      {site.gacha.map((_, i) => {
+        const it = items[i]
+        return (
+          <li key={i} className={`relative grid aspect-square place-items-center rounded-full border ${it ? 'border-wine/30 bg-paper-2' : 'border-dashed border-ink/25'}`}>
+            {it ? <GachaItemArt id={it.id} uid={`${uid}${i}`} className="h-[86%] w-[86%]" /> : <span className="label text-[10px] text-ink/30">?</span>}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function Reveal({ item, n, total, collected, onClose, onNewRound, last }: { item: GachaItem; n: number; total: number; collected: GachaItem[]; onClose: () => void; onNewRound: () => void; last: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   useGsap(ref, () => {
     if (prefersReducedMotion()) return
-    gsap.from('[data-card]', { scale: 0.5, rotate: -10, x: -80, y: 60, opacity: 0, duration: 0.8, ease: 'back.out(1.5)' })
-    gsap.from('[data-c]', { opacity: 0, y: 10, stagger: 0.07, duration: 0.5, delay: 0.35 })
+    gsap.from('[data-backdrop]', { opacity: 0, duration: 0.3 })
+    gsap.from('[data-panel]', { y: 40, scale: 0.92, opacity: 0, duration: 0.45, ease: 'power3.out' })
+    gsap.fromTo('[data-art]', { y: 90, scale: 0.15, rotate: -30, opacity: 0 }, { y: 0, scale: 1, rotate: 0, opacity: 1, duration: 0.9, delay: 0.15, ease: 'back.out(1.6)' })
+    gsap.from('[data-glow]', { scale: 0.3, opacity: 0, duration: 0.8, delay: 0.1, ease: 'power2.out' })
+    gsap.from('[data-r]', { opacity: 0, y: 12, stagger: 0.08, duration: 0.5, delay: 0.55 })
   })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   return (
-    <div ref={ref} className="flex flex-col items-start" role="status" aria-live="polite" aria-label={prize.title}>
-      <div data-card className="relative w-full max-w-[420px]">
-        {prize.kind === 'prize' ? (
+    <div ref={ref} className="fixed inset-0 z-[70] flex items-center justify-center px-4 py-4" role="dialog" aria-modal="true" aria-label={item.title}>
+      <div data-backdrop className="absolute inset-0 bg-ink/75 backdrop-blur-[3px]" onClick={onClose} />
+      <div data-panel className="relative flex max-h-full w-full max-w-[400px] flex-col wide:max-w-[460px] items-center overflow-y-auto bg-paper-2 px-5 pb-6 pt-4 text-center text-ink shadow-[0_40px_80px_-30px_rgba(0,0,0,.8)]">
+        <div className="flex w-full items-center justify-between">
+          <span className="label text-[9px] text-wine">
+            Gachapon · {String(n).padStart(2, '0')}/{String(total).padStart(2, '0')}
+          </span>
+          <button type="button" onClick={onClose} className="-mr-2 grid h-9 w-9 place-items-center rounded-full text-ink/60 hover:text-ink" aria-label="Закрыть">
+            <X size={18} strokeWidth={1.6} />
+          </button>
+        </div>
+        <div className="relative my-1 aspect-square w-[min(62vw,250px,34svh)] wide:w-[min(300px,40svh)] shrink-0">
           <div
-            className="relative bg-wine px-6 pb-6 pt-5 text-paper"
+            data-glow
+            className="spin-slow absolute inset-[-12%] rounded-full"
             style={{
-              maskImage: 'radial-gradient(circle 12px at 0 62%, transparent 98%, #000), radial-gradient(circle 12px at 100% 62%, transparent 98%, #000)',
-              maskComposite: 'intersect',
-              WebkitMaskImage: 'radial-gradient(circle 12px at 0 62%, transparent 98%, #000), radial-gradient(circle 12px at 100% 62%, transparent 98%, #000)',
-              WebkitMaskComposite: 'source-in',
+              background: 'repeating-conic-gradient(from 0deg, rgba(200,154,99,.28) 0 9deg, transparent 9deg 24deg)',
+              maskImage: 'radial-gradient(circle, #000 30%, transparent 70%)',
+              WebkitMaskImage: 'radial-gradient(circle, #000 30%, transparent 70%)',
             }}
-          >
-            {prize.accent && <div className="absolute inset-y-0 left-0 w-[6px]" style={{ background: prize.accent }} />}
-            <div className="flex items-center justify-between" data-c>
-              <span className="label flex items-center gap-2 text-gold">
-                {prize.accent && <span className="inline-block h-2 w-2 rounded-full" style={{ background: prize.accent }} />}
-                {prize.rarity ?? 'Prize'}
-              </span>
-              <span className="label text-[9px] opacity-60">№ 0018</span>
-            </div>
-            <div className="display mt-3 text-[clamp(64px,18vw,96px)] italic text-gold" data-c>
-              {prize.label}
-            </div>
-            <div className="mt-2 font-display text-[24px] font-medium leading-tight opacity-85" data-c>
-              {prize.title}
-            </div>
-            <p className="mt-1 font-display text-[clamp(28px,7.6vw,36px)] font-medium italic leading-tight" data-c>
-              {prize.text}
-            </p>
-            <div className="my-4 border-t border-dashed border-paper/40" />
-            {prize.note && (
-              <p className="label text-[10px] normal-case tracking-[0.06em] opacity-70" data-c>
-                {prize.note}
-              </p>
-            )}
+          />
+          <div data-art className="relative h-full w-full">
+            <GachaItemArt id={item.id} uid="reveal" className="h-full w-full" />
           </div>
-        ) : prize.kind === 'photo' ? (
-          <div className="bg-paper-2 p-3 pb-5 shadow-2xl" style={{ rotate: '-2deg' }}>
-            <div className="aspect-square overflow-hidden" data-c>
-              <SmartImage src={prize.image} alt={prize.title} className="h-full w-full object-cover" />
-            </div>
-            <div className="mt-3 flex items-center justify-between px-1" data-c>
-              <span className="label text-wine">{prize.label}</span>
-              <span className="font-display text-[22px] italic">{prize.title}</span>
-            </div>
-            <p className="mt-1 px-1 font-display text-[16px] italic text-ink/60" data-c>
-              {prize.text}
-            </p>
-          </div>
-        ) : (
-          <div className="relative overflow-hidden bg-paper-2 px-6 pb-7 pt-5 shadow-2xl">
-            <div className="absolute inset-x-0 top-0 h-2" style={{ background: color }} />
-            {prize.kind === 'wish' && <Sprig className="absolute -right-3 bottom-0 h-40 rotate-[18deg] text-gold/60" />}
-            <div className="flex items-center gap-3 text-wine" data-c>
-              <span className="label">{prize.label}</span>
-              <span className="hairline flex-1" />
-              <span className="jp text-[11px] tracking-[0.3em]">ガチャ</span>
-            </div>
-            <div className="display mt-4 text-[clamp(32px,9vw,48px)] italic leading-[0.95] text-wine" data-c>
-              {prize.title}
-            </div>
-            <p className="relative mt-4 font-display text-[24px] font-medium leading-snug text-ink" data-c>
-              {prize.text}
-            </p>
-            {prize.note && <p className="relative mt-3 font-display text-[16px] italic text-ink/55">{prize.note}</p>}
-          </div>
-        )}
+        </div>
+        <h3 data-r className="display text-[clamp(28px,8vw,36px)] italic leading-[1.05] text-wine">
+          {item.title}
+        </h3>
+        <p data-r className="mt-2 max-w-[320px] font-display text-[clamp(17px,4.6vw,20px)] leading-snug text-ink/85">
+          {item.text}
+        </p>
+        <div data-r className="mt-5 flex w-full flex-col items-center gap-2">
+          <span className="label text-[9px] text-ink/60">
+            Собрано {n}/{total}
+          </span>
+          <Shelf items={collected} uid="modal" small />
+        </div>
+        <div data-r className="mt-6 flex flex-wrap justify-center gap-3">
+          {last ? (
+            <button type="button" data-primary onClick={onNewRound} className="btn-pill btn-solid">
+              Начать новый круг
+            </button>
+          ) : (
+            <button type="button" data-primary onClick={onClose} className="btn-pill btn-solid">
+              Ещё капсулу
+            </button>
+          )}
+        </div>
       </div>
-      <button type="button" onClick={onAgain} className="btn-pill btn-solid mt-8" data-c>
-        {lastOne ? 'Перезаправить автомат' : 'Ещё капсулу'}
-      </button>
     </div>
   )
 }
